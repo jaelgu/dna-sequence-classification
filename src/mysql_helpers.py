@@ -74,16 +74,7 @@ class MySQLHelper():
             results_id = [res[0] for res in results]
             results_class = [res[1] for res in results]
             LOGGER.debug("MYSQL search by milvus id.")
-            str_classes = str(results_class).replace('[', '').replace(']', '')
-            sql2 = "select * from " + table_name + "_class where seq_class in (" + str_classes + ") order by field (seq_class," + str_classes + ");"
-            try:
-                self.cursor.execute(sql2)
-                results2 = self.cursor.fetchall()
-                results_class = [res[0] for res in results2]
-                results_gene = [res[1] for res in results2]
-            except Exception as e:
-                LOGGER.error("MYSQL ERROR: {} with sql: {}".format(e, sql2))
-            return results_id, results_class, results_gene
+            return results_id, results_class
         except Exception as e:
             LOGGER.error("MYSQL ERROR: {} with sql: {}".format(e, sql1))
             sys.exit(1)

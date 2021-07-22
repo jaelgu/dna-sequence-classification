@@ -85,10 +85,10 @@ async def load_text(file: UploadFile = File(...), table_name: str = None):
 async def do_search_api(table_name: str = None, query_sentence: str = None):
     try:
 
-        results_class, seq_genes, distances = search_in_milvus(table_name,query_sentence, MILVUS_CLI, MYSQL_CLI)
+        ids, results_classes, seq_genes, distances = search_in_milvus(table_name,query_sentence, MILVUS_CLI, MYSQL_CLI)
         res = []
-        for c, s, d in zip(results_class, seq_genes, distances):
-            dicts = {'seq_class': c, 'seq_gene': s, 'IP distance':d}
+        for i, c, s, d in zip(ids, results_classes, seq_genes, distances):
+            dicts = {'milvus_id': i,'seq_class': c, 'seq_gene': s, 'IP distance':d}
             res+=[dicts]
         LOGGER.info("Successfully searched similar sequence!")
         return res
