@@ -8,7 +8,7 @@ import pickle
 from sklearn import preprocessing
 
 sys.path.append("..")
-from config import DEFAULT_TABLE,TOP_K, VECTOR_DIMENSION, KMER_K, SEQ_CLASS_PATH
+from config import DEFAULT_TABLE,TOP_K, VECTOR_DIMENSION, KMER_K
 from utils import *
 from logs import LOGGER
 
@@ -44,10 +44,7 @@ def import_data(collection_name, file_dir, milvus_cli, mysql_cli):
     ids = milvus_cli.insert(collection_name, vectors)
     milvus_cli.create_index(collection_name)
     mysql_cli.create_mysql_table(collection_name)
-    mysql_cli.create_class_table(class_name)
     mysql_cli.load_data_to_mysql(collection_name, format_data(ids, df['class']))
-    df_class = pd.read_table(SEQ_CLASS_PATH)
-    mysql_cli.load_data_to_class(class_name, format_data(list(df_class['class']), list(df_class['gene_family'])))
     return len(ids)
 
 """
