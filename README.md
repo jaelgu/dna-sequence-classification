@@ -1,20 +1,24 @@
 ## README
 
-This project uses Milvus and Bert to build a Text Search Engine. In this project, Bert is used to convert the text into a fixed-length vector and store it in Milvus, and then combine Milvus to search for similar text in the text entered by the user.
+This project builds a DNA sequence classification system with Milvus. In this project, k-mer & CountVectorizer is used to convert the original DNA sequence into a fixed-length vector and store it in Milvus. The system classifies DNA sequence entered by user through searching for most similar sequences in Milvus and recalling classes (gene family names) from Mysql.
 
 ### Data source
 
-The dataset needed for this system is a **CSV** format file which needs to contain a column of titles and a column of texts.
+The dataset required to build this system has to be a **TXT** file, which can be read as dataframe with 2 columns: **sequence, class**. (See example: /src/data/test.txt)
+
+A **TXT** file is also required to indicate what gene family each class represents, including 2 dataframe columns: **class, gene_family**. (See example: /src/data/gene_class.txt)
 
 ## How to deploy the system
 
 ### 1. Start Milvus and MySQL
 
-The system will use Milvus to store and search the feature vector data, and Mysql is used to store the correspondence between the ids returned by Milvus and the text data  , then you need to start Milvus and Mysql first.
+The system will use Milvus to store sequence vectors with auto-generated ids in a collection and perform similarity search.
+
+Mysql stores sequence ids in Milvus and corresponding classes. It also includes the correspondence between class labels and gene family names.
 
 - **Start Milvus v2.0**
 
-First, you are supposed to refer to the Install Milvus v2.0 for how to run Milvus docker.
+Refer to [Install Milvus v2.0](https://milvus.io/docs/v2.0.0/install_standalone-docker.md) for how to run Milvus docker.
 
 ```
 $ wget https://raw.githubusercontent.com/milvus-io/milvus/master/deployments/docker/standalone/docker-compose.yml -O docker-compose.yml
@@ -47,20 +51,6 @@ $ cd server
 $ pip install -r requirements.txt
 ```
 
-- **wget the model**
-
-The way to install Bert-as-service is as follows. You can also refer to the official website link of the Github repository of Bert-as-service:
-
-https://github.com/hanxiao/bert-as-service
-
-```
-# Download model
-$ cd model
-$ wget https://storage.googleapis.com/bert_models/2018_11_03/uncased_L-12_H-768_A-12.zip
-# start service
-$ bert-serving-start -model_dir uncased_L-12_H-768_A-12/ -num_worker=2
-```
-
 - **Set configuration**
 
 ```
@@ -69,19 +59,22 @@ $ vim server/src/config.py
 
 Please modify the parameters according to your own environment. Here listing some parameters that need to be set, for more information please refer to [config.py](https://github.com/miia12/bootcamp/blob/master/solutions/reverse_image_search/quick_deploy/server/src/config.py).
 
-| **Parameter**    | **Description**                                       | **Default setting** |
-| ---------------- | ----------------------------------------------------- | ------------------- |
-| MILVUS_HOST      | The IP address of Milvus, you can get it by ifconfig. | 127.0.0.1           |
-| MILVUS_PORT      | Port of Milvus.                                       | 19530               |
-| VECTOR_DIMENSION | Dimension of the vectors.                             | 2048                |
-| MYSQL_HOST       | The IP address of Mysql.                              | 127.0.0.1           |
-| MYSQL_PORT       | Port of Milvus.                                       | 3306                |
-| DEFAULT_TABLE    | The milvus and mysql default collection name.         | text_search         |
+| **Parameter**    | **Description**                                       | **Default setting**    |
+| ---------------- | ----------------------------------------------------- | ---------------------- |
+| MILVUS_HOST      | The IP address of Milvus, you can get it by ifconfig. | 'localhost'            |
+| MILVUS_PORT      | Port of Milvus.                                       | 19530                  |
+| VECTOR_DIMENSION | Dimension of the vectors.                             | 768                    |
+| MYSQL_HOST       | The IP address of Mysql.                              | 'localhost'            |
+| MYSQL_PORT       | Port of Milvus.                                       | 3306                   |
+| DEFAULT_TABLE    | The milvus and mysql default collection name.         | 'dna_sequence'         |
+| MODEL_PATH       | File path to save CountVectorizer trained             | './vectorizer.pkl'     |
+| KMER_K           | k for k-mer                                           | 4                      |
+| SEQ_CLASS_PATH   | File path of txt file for class meanings              | './data/gene_class.txt'|
 
 
 - **Run the code**
 
-Then start the server with Fastapi.
+Start the server with Fastapi.
 
 ```
 $ cd src
@@ -99,64 +92,49 @@ $ python main.py
   │   │
   │   └───src
   │       │   config.py  # Configuration file.
-  │       │   encode.py  # Covert image/video/questions/text/... to embeddings.
+  │       │   utils.py  # Process DNA sequences: k-mer, fit CountVectorizer, convert data to embeddings.
   │       │   milvus_helpers.py  # Connect to Milvus server and insert/drop/query vectors in Milvus.
   │       │   mysql_helpers.py   # Connect to MySQL server, and add/delete/query IDs and object information.
   │       │   
-  │       └───operations # Call methods in milvus.py and mysql.py to insert/query/delete objects.
-  │               │   insert.py
-  │               │   query.py
-  │               │   delete.py
+  │       └───operations # Call methods in milvus_helpers.py and mysql_helpers.py to insert/search/delete/count objects.
+  │               │   load.py
+  │               │   search.py
+  │               │   drop.py
   │               │   count.py
   ```
 
 
 - **API docs** 
 
-Vist 127.0.0.1:5000/docs in your browser to use all the APIs.
+Vist localhost:5001/docs in your browser to use all the APIs.
 
 ![1](pic/1.png)
 
 **/text/load_data**
 
 This API is used to import datasets into the system.
+A successful import will have
+- a Milvus collection with vectors & auto_ids
+- a Mysql table with milvus_ids & classes
+- a pickle file saved for fitted vectorizer
+    
+![2](pic/2.png)
 
 **/text/search**
 
-This API is used to get similar texts in the system.
+This API is used to get class, gene family, inner product distance for topK similar DNA sequences in the system.
+* Enter the Milvus collection name to search through
+* Input a DNA sequence to search for (eg. ATGTTCGTGGCATCAGAGAGAAAGATGAGAGCTCACCAGGTGCTCACCTTCCTCCTGCTCTTCGTGATCACCTCGGTGGCCTCTGAAAACGCCAGCACATCCCGAGGCTGTGGGCTGGACCTCCTCCCTCAGTACGTGTCCCTGTGCGACCTGGACGCCATCTGGGGCATTGTGGTGGAGGCGGTGGCCGGGGCGGGCGCCCTGATCACACTGCTCCTGATGCTCATCCTCCTGGTGCGGCTGCCCTTCATCAAGGAGA)
+
+![3](pic/3.png)
 
 **/text/count**
 
-This API is used to get the number of the titles in the system.
+This API is used to get the number of the DNA sequences in the system.
 
 **/text/drop**
 
 This API is used to delete a specified collection.
 
-
-3、Start the UI client
-----------------------  
-Install  [Node.js 12+](https://nodejs.org/en/download/) and [Yarn](https://classic.yarnpkg.com/en/docs/install/).
-
-```
-$ cd client 
-# Install dependencies
-$ yarn install 
-#start yarn 
-$ yarn start   
-open localhost:3000
-```
-
-
-4、The interface display
----------------------- 
-
-Enter 127.0.0.1:3000 in the browser to open the search page and enter the search text.Upload a **csv** file of the title and text
-
-![1](./pic/3.png)
-
-Get the search results of the input text, as shown in the figure
-
-![2](./pic/2.png)
 
 
